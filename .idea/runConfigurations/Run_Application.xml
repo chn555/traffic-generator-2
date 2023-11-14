@@ -1,0 +1,9 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Run Application" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <module name="ti_cookie_cutter.main" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="com.wib.ti.cookiecutter.CookieCutterApplication" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

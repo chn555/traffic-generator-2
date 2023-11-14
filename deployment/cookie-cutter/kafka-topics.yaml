@@ -1,0 +1,18 @@
+{{- range $topic_id, $topic_info := .Values.kafka.topics.cookie_cutter }}
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: {{ $topic_info.name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    strimzi.io/cluster: {{ $.Values.global.external_kafka.cluster }}
+spec:
+  partitions: {{ int $topic_info.partitions | default 30 }}
+  replicas: {{ int $topic_info.replicas | default 1 }}
+  config:
+    retention.ms: {{ int $topic_info.retention_ms  | default 7200000 }}
+    segment.bytes: {{ int $topic_info.segment_bytes | default 50000000 }}
+    cleanup.policy: {{ $topic_info.cleanup_policy | default "delete" | quote }}
+    min.cleanable.dirty.ratio: {{ $topic_info.min_cleanable_dirty_ratio | default 0.1 }}
+    max.compaction.lag.ms: {{ int $topic_info.max_compaction_lag_ms | default 86400000 }}
+{{- end }}

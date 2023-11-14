@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  {{- with .Values.cookie_cutter }}
+  name: {{ .service_name }}
+  namespace:  {{ $.Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+      svc: {{ .service_name }}
+  template:
+    metadata:
+      labels:
+        svc: {{ .service_name }}
+    spec:
+      containers:
+        - name: {{ .service_name }}
+          image: {{ .image }}:{{ .version }}
+          resources:
+            requests:
+              memory: {{ .memory }}
+              cpu: {{ .cpu }}
+            limits:
+              memory: {{ .memoryLimit }}
+          imagePullPolicy: Always
+          volumeMounts:
+            - name: config
+              mountPath: /usr/src/app/config
+            - name: ca
+              readOnly: true
+              mountPath: /ca
+            - name: client
+              readOnly: true
+              mountPath: /client-certificates
+          envFrom:
+            - configMapRef:
+                name: {{ $.Values.global.wib.shared_config.configmap_name }}
+          env:
+            - name: KAFKA_CLIENT_CERTIFICATE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.global.external_kafka.admin }}
+                  key: user.password
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: service.name={{ .service_name }}
+            - name: OTEL_EXPORTER_OTLP_COMPRESSION
+              value: gzip
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            periodSeconds: 5
+            failureThreshold: 5
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            failureThreshold: 30
+            periodSeconds: 10
+      imagePullSecrets:
+        - name: dockerconfigjson-github-com
+      volumes:
+        - name: config
+          configMap:
+            name: {{ .service_name }}.config
+        - name: ca
+          secret:
+            secretName: {{ $.Values.global.external_kafka.cluster }}-cluster-ca-cert
+        - name: client
+          secret:
+            secretName: {{ $.Values.global.external_kafka.admin }}
+  {{- end}}

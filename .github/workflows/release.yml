@@ -1,0 +1,77 @@
+
+name: Release microservice
+
+on:
+  workflow_dispatch:
+    inputs:
+      trigger_uuid:
+        description: 'the trigger UUID for which we will create an artifact'
+        required: false
+  workflow_call:
+    secrets:
+      WIB_CI_GITHUB_TOKEN:
+        required: true
+      ARTIFACTORY_PYPI_EXTRA_INDEX:
+        required: true
+
+jobs:
+  tag-main-on-repo:
+    runs-on: ubuntu-latest
+
+    if: ${{ github.event_name != 'pull_request' }}
+
+    outputs:
+      tag_name: ${{ steps.set-tag.outputs.tag_name }}
+
+    env:
+      GITHUB_TOKEN: ${{ secrets.WIB_CI_GITHUB_TOKEN }}
+    steps:
+      - id: release
+        uses: rymndhng/release-on-push-action@master
+        with:
+          bump_version_scheme: minor
+          tag_prefix: ""
+
+      - name: Check Output Parameters
+        run: |
+          echo "Got tag name ${{ steps.release.outputs.tag_name }}"
+          echo "Got release version ${{ steps.release.outputs.version }}"
+
+      - id: set-tag
+        run: echo "::set-output name=tag_name::${{ steps.release.outputs.tag_name }}"
+
+  package:
+    needs:
+      - tag-main-on-repo
+
+    if: always()
+
+    uses: ./.github/workflows/ti-package.yml
+    with:
+      tag_name: ${{ needs.tag-main-on-repo.outputs.tag_name }}
+      should_push: ${{ format('{0}', github.event_name != 'pull_request') }}
+    secrets:
+      ARTIFACTORY_PYPI_EXTRA_INDEX: ${{ secrets.ARTIFACTORY_PYPI_EXTRA_INDEX }}
+      WIB_CI_GITHUB_TOKEN: ${{ secrets.WIB_CI_GITHUB_TOKEN }}
+      ARTIFACTORY_USER: ${{ secrets.ARTIFACTORY_USER }}
+      ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
+
+  workflow-end-mark:
+    runs-on: ubuntu-latest
+    needs:
+      - tag-main-on-repo
+      - package
+
+    steps:
+      - name: Create Run UUID Artifact
+        if: github.event.inputs.trigger_uuid != ''
+        run: |
+          echo $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID | \
+              tee /tmp/${{ github.event.inputs.trigger_uuid }}
+
+      - name: Upload UUID As An Artifact
+        uses: actions/upload-artifact@v2
+        if: ${{ always() && github.event.inputs.trigger_uuid != '' }}
+        with:
+          name: ${{ github.event.inputs.trigger_uuid }}
+          path: /tmp/${{ github.event.inputs.trigger_uuid }}

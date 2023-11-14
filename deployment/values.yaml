@@ -1,0 +1,19 @@
+traffic-inspection-server:
+  kafka:
+    topics:
+      cookie_cutter:
+        cookies:
+          name: "cookies"
+          partitions: 3
+          replicas: 1
+          retention_ms: 7200000
+          segment_bytes: 1073741824
+  cookie_cutter:
+    insecure: true
+    groupID: ti_cookie_cutter_consumer_group
+    service_name: "ti-cookie-cutter"
+    image: ghcr.io/wib-com/cookie-cutter
+    cpu: "0.5"
+    memory: "2000Mi"
+    memoryLimit: "3000Mi"
+    version: {{lookup("IMAGE_VERSION") }}

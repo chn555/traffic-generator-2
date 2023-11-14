@@ -1,0 +1,171 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: Container images creation
+
+on:
+  push:
+    branches: [ 'main', 'develop' ]
+  workflow_dispatch:
+    inputs:
+      trigger_uuid:
+        description: 'the trigger UUID for which we will create an artifact'
+        required: false
+  workflow_call:
+    inputs:
+      tag_name:
+        required: false
+        type: string
+        default: ''
+      should_push:
+        required: false
+        type: string
+        default: 'true'
+    secrets:
+      ARTIFACTORY_PYPI_EXTRA_INDEX:
+        required: true
+      WIB_CI_GITHUB_TOKEN:
+        required: true
+      ARTIFACTORY_USER:
+        required: true
+      ARTIFACTORY_PASSWORD:
+        required: true
+
+
+env:
+  REGISTRY: ghcr.io
+  WIB_CI_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  workflow-setup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+
+      - name: Install packaging dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install wib-build --extra-index-url "${{ secrets.ARTIFACTORY_PYPI_EXTRA_INDEX}}"
+
+      - name: Create artifacts-version for current workflow
+        run: |
+          WORKFLOW_ARTIFACTS_VERSION=$(wib-build print-current-workflow-version)
+          echo "Artifacts verion for current workflow: $WORKFLOW_ARTIFACTS_VERSION"
+          
+          echo $WORKFLOW_ARTIFACTS_VERSION | tee /tmp/workflow_artifact_verion
+
+      - name: Upload current workflow artifacts version as an artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: workflow_artifact_verion
+          path: /tmp/workflow_artifact_verion
+
+  build-and-push-api-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    needs:
+      - workflow-setup
+
+    env:
+      IMAGE_NAME: wib-com/cookie-cutter
+
+    steps:
+      - name: Checkout workflow-version file
+        uses: actions/download-artifact@v3
+        with:
+          name: workflow_artifact_verion
+          path: /tmp/
+
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v2
+        with:
+          java-version: '17'
+          distribution: 'adopt'
+
+      - name: Validate Gradle wrapper
+        uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
+
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v2
+
+      - name: Execute Gradle build
+        run: ./gradlew build --refresh-dependencies -PartifactoryUser=${{ secrets.ARTIFACTORY_USER }} -PartifactoryPassword=${{ secrets.ARTIFACTORY_PASSWORD }}
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      - name: Set default image tag
+        run: |
+          echo "IMAGE_TAGS=${{ steps.meta.outputs.tags }}" >> $GITHUB_ENV
+
+      - name: Set image tag if needed (on release process)
+        if: ${{ inputs.tag_name != '' }}
+        run: |
+          echo "IMAGE_TAGS=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.tag_name }}" >> $GITHUB_ENV 
+
+      - name: Build and push Docker image
+        if: (format('{0}', inputs.should_push) == 'true') || (format('{0}', inputs.should_push) == '')
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          build-args: |
+            personal_token=${{secrets.WIB_CI_GITHUB_TOKEN}}
+          tags: ${{ env.IMAGE_TAGS }}
+          labels: ${{ steps.meta.outputs.labels }}
+          file: Dockerfile
+
+      - name: Build Docker image
+        if: (format('{0}', inputs.should_push) == 'false')
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: false
+          build-args: |
+            personal_token=${{secrets.WIB_CI_GITHUB_TOKEN}}
+          tags: ${{ env.IMAGE_TAGS }}
+          labels: ${{ steps.meta.outputs.labels }}
+          file: Dockerfile
+
+
+  workflow-end-mark:
+    runs-on: ubuntu-latest
+    needs:
+      - workflow-setup
+      - build-and-push-api-image
+
+    steps:
+      - name: Create Run UUID Artifact
+        if: github.event.inputs.trigger_uuid != ''
+        run: |
+          echo $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID | \
+              tee /tmp/${{ github.event.inputs.trigger_uuid }}
+
+      - name: Upload UUID As An Artifact
+        uses: actions/upload-artifact@v2
+        if: ${{ always() && github.event.inputs.trigger_uuid != '' }}
+        with:
+          name: ${{ github.event.inputs.trigger_uuid }}
+          path: /tmp/${{ github.event.inputs.trigger_uuid }}

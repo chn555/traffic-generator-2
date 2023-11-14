@@ -1,0 +1,27 @@
+#logging:
+#  level:
+#    root: INFO
+#    o.a.coyote.http11: INFO
+#    org.springframework: ERROR
+#    org.apache.kafka: ERROR
+#    org.apache.kafka.clients.NetworkClient: INFO
+#    org.apache.kafka.streams.KafkaStreams: INFO
+#    org.springframework.web.filter.CommonsRequestLoggingFilter: ERROR
+
+spring:
+  kafka:
+    group-id: ${KAFKA_GROUP_ID:cookie-cutter}
+    client-id: ${KAFKA_CLIENT_ID:cookie-cutter-id}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9093}
+    security:
+      protocol: ${KAFKA_SECURITY_PROTOCOL:PLAINTEXT}
+    ssl:
+      trust-store-type: ${KAFKA_TRUSTSTORE_TYPE:PEM}
+      trust-store-location: file:${KAFKA_CA_PATH:src/main/resources/ca.cert}
+      key-store-type: ${KAFKA_KEYSTORE_TYPE:PKCS12}
+      key-store-location: file:${KAFKA_CLIENT_CERTIFICATE_PATH:src/main/resources/user.p12}
+      key-store-password: ${KAFKA_CERTIFICATE_PASSWORD:bn8l2LsDJBrM}
+
+cookie-cutter:
+  kafka:
+    exampleCantBeEmptyWithoutDefaultValue: "value"
