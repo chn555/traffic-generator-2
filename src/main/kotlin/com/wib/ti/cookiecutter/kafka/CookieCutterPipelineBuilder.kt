@@ -37,6 +37,7 @@ class CookieCutterPipelineBuilder(
                 valueSerde = valueSerde,
                 isDuplicate = { newValue, storedValue -> newValue == storedValue },
             )
+            .to("topic-output")
     }
 }
 
