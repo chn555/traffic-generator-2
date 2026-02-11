@@ -1,9 +1,9 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    kotlin("jvm") version "1.7.21"
-    kotlin("plugin.spring") version "1.6.10"
-    kotlin("plugin.serialization") version "1.6.10"
+    kotlin("jvm") version "1.9.25"
+    kotlin("plugin.spring") version "1.9.25"
+    kotlin("plugin.serialization") version "1.9.25"
     id("org.springframework.boot") version "2.6.3"
     id("io.spring.dependency-management") version "1.0.11.RELEASE"
 }
@@ -13,16 +13,9 @@ version = "0.0.1-SNAPSHOT"
 java.sourceCompatibility = JavaVersion.VERSION_17
 
 repositories {
-    maven {
-        url = uri("https://wib.jfrog.io/artifactory/default-maven-virtual/")
-        credentials {
-            username = findProperty("artifactoryUser").toString()
-            password = findProperty("artifactoryPassword").toString()
-        }
-    }
     mavenCentral()
+    maven("https://packages.confluent.io/maven/")
 }
-val wibProtobufVersion = "0.2023157.2"
 
 dependencies {
     // Kotlin
@@ -32,10 +25,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
 
     // WIB
-    implementation("com.wib.infrastructure:wib_infrastructure:2023.222.2")
-    implementation("com.wib.traffic_inspection:traffic-inspection-pre-processor-messaging:$wibProtobufVersion")
-    implementation("com.wib.traffic_inspection:traffic-inspection-usage-discovery-messaging:$wibProtobufVersion")
-    implementation("com.wib.platform:messaging:2023.115.1")
 
     // Spring boot
     implementation("org.springframework.boot:spring-boot-starter")
@@ -58,7 +47,10 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:5.9.0")
 
     // protobuf
-    runtimeOnly("com.google.protobuf:protobuf-java-util:3.21.9")
+    implementation("com.google.protobuf:protobuf-java:4.29.3")
+    implementation("com.google.protobuf:protobuf-kotlin:4.29.3")
+    runtimeOnly("com.google.protobuf:protobuf-java-util:4.29.3")
+
 
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
 

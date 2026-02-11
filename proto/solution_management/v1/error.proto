@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package solution_management.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/onelayerhq/solution-management/api/solution_management/v1";
+
+// Error can be used to convey error information in responses. It includes an
+// error message and a timestamp indicating when the response was generated.
+//
+// If a response type can include error information, it should embed this Error as an optional field.
+message Error {
+  // Error message if operation failed.
+  string message = 1;
+  // Timestamp when the response was generated.
+  google.protobuf.Timestamp timestamp = 2;
+}
