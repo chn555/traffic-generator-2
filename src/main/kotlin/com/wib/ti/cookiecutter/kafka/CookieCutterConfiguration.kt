@@ -12,9 +12,10 @@ import javax.validation.constraints.NotNull
 data class CookieCutterConfiguration(
     @field:NotEmpty
     @field:NotNull
-    val exampleCantBeEmptyWithoutDefaultValue: String,
-
+    val inputTopic: String,
     @field:NotEmpty
     @field:NotNull
-    val exampleCantBeEmptyWithDefaultValue: String = "I am default value"
+    val outputTopic: String,
+
+
 )

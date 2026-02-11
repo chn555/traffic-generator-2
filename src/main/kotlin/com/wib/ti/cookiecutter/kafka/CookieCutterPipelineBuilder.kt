@@ -28,7 +28,7 @@ class CookieCutterPipelineBuilder(
     ) {
         val valueSerde = protobufSerde(Error.parser())
 
-        streamsBuilder.stream<String, Error>("topic")
+        streamsBuilder.stream<String, Error>(config.inputTopic)
             .dedup(
                 streamsBuilder = streamsBuilder,
                 storeName = DEDUP_STORE_NAME,
@@ -36,7 +36,7 @@ class CookieCutterPipelineBuilder(
                 valueSerde = valueSerde,
                 isDuplicate = { newValue, storedValue -> newValue == storedValue },
             )
-            .to("topic-output")
+            .to(config.outputTopic)
     }
 }
 
