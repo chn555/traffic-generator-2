@@ -1,9 +1,7 @@
 package com.wib.ti.cookiecutter.kafka
 
-import com.solution_management.v1.KubernetesControlRequest
-import com.solution_management.v1.KubernetesGetRequest
-import com.solution_management.v1.KubernetesLogsRequest
-import com.solution_management.v1.KubectlOutputFormat
+import com.google.protobuf.Timestamp
+import com.solution_management.v1.Error
 import org.apache.kafka.common.serialization.Serdes
 import org.apache.kafka.streams.StreamsBuilder
 import org.apache.kafka.streams.StreamsConfig
@@ -34,10 +32,10 @@ class DeduplicationTransformerTest {
     fun setUp() {
         val builder = StreamsBuilder()
 
-        val valueSerde = protobufSerde(KubernetesControlRequest.parser())
+        val valueSerde = protobufSerde(Error.parser())
 
         builder.stream(INPUT_TOPIC, Consumed.with(Serdes.String(), Serdes.ByteArray()))
-            .mapValues { bytes -> KubernetesControlRequest.parseFrom(bytes) }
+            .mapValues { bytes -> Error.parseFrom(bytes) }
             .dedup(
                 streamsBuilder = builder,
                 storeName = STORE_NAME,
@@ -71,45 +69,28 @@ class DeduplicationTransformerTest {
         testDriver.close()
     }
 
-    private fun makeGetRequest(type: String, name: String): KubernetesControlRequest {
-        return KubernetesControlRequest.newBuilder()
-            .setGet(
-                KubernetesGetRequest.newBuilder()
-                    .setType(type)
-                    .setName(name)
-                    .setOutputFormat(KubectlOutputFormat.OUTPUT_FORMAT_JSON)
-                    .build()
-            )
-            .build()
-    }
-
-    private fun makeLogsRequest(resource: String, container: String, tailLines: Long): KubernetesControlRequest {
-        return KubernetesControlRequest.newBuilder()
-            .setLogs(
-                KubernetesLogsRequest.newBuilder()
-                    .setResource(resource)
-                    .setContainer(container)
-                    .setTailLines(tailLines)
-                    .build()
-            )
+    private fun makeError(message: String, epochSeconds: Long = 0): Error {
+        return Error.newBuilder()
+            .setMessage(message)
+            .setTimestamp(Timestamp.newBuilder().setSeconds(epochSeconds).build())
             .build()
     }
 
     @Test
     fun `first event passes through`() {
-        val request = makeGetRequest("Pod", "my-pod")
-        inputTopic.pipeInput("key1", request.toByteArray())
+        val error = makeError("pod not found")
+        inputTopic.pipeInput("key1", error.toByteArray())
 
         val results = outputTopic.readRecordsToList()
         assertEquals(1, results.size)
-        assertEquals(request, KubernetesControlRequest.parseFrom(results[0].value()))
+        assertEquals(error, Error.parseFrom(results[0].value()))
     }
 
     @Test
     fun `duplicate event is suppressed`() {
-        val request = makeGetRequest("Pod", "my-pod")
-        inputTopic.pipeInput("key1", request.toByteArray())
-        inputTopic.pipeInput("key1", request.toByteArray())
+        val error = makeError("pod not found")
+        inputTopic.pipeInput("key1", error.toByteArray())
+        inputTopic.pipeInput("key1", error.toByteArray())
 
         val results = outputTopic.readRecordsToList()
         assertEquals(1, results.size)
@@ -117,22 +98,22 @@ class DeduplicationTransformerTest {
 
     @Test
     fun `different event for same key passes through`() {
-        val request1 = makeGetRequest("Pod", "my-pod")
-        val request2 = makeGetRequest("Deployment", "my-deploy")
-        inputTopic.pipeInput("key1", request1.toByteArray())
-        inputTopic.pipeInput("key1", request2.toByteArray())
+        val error1 = makeError("pod not found")
+        val error2 = makeError("deployment failed")
+        inputTopic.pipeInput("key1", error1.toByteArray())
+        inputTopic.pipeInput("key1", error2.toByteArray())
 
         val results = outputTopic.readRecordsToList()
         assertEquals(2, results.size)
-        assertEquals(request1, KubernetesControlRequest.parseFrom(results[0].value()))
-        assertEquals(request2, KubernetesControlRequest.parseFrom(results[1].value()))
+        assertEquals(error1, Error.parseFrom(results[0].value()))
+        assertEquals(error2, Error.parseFrom(results[1].value()))
     }
 
     @Test
     fun `same event for different keys passes through`() {
-        val request = makeGetRequest("Pod", "my-pod")
-        inputTopic.pipeInput("key1", request.toByteArray())
-        inputTopic.pipeInput("key2", request.toByteArray())
+        val error = makeError("pod not found")
+        inputTopic.pipeInput("key1", error.toByteArray())
+        inputTopic.pipeInput("key2", error.toByteArray())
 
         val results = outputTopic.readRecordsToList()
         assertEquals(2, results.size)
@@ -140,24 +121,24 @@ class DeduplicationTransformerTest {
 
     @Test
     fun `updated event replaces stored and new duplicate is suppressed`() {
-        val request1 = makeGetRequest("Pod", "my-pod")
-        val request2 = makeGetRequest("Deployment", "my-deploy")
-        inputTopic.pipeInput("key1", request1.toByteArray())
-        inputTopic.pipeInput("key1", request2.toByteArray())
-        inputTopic.pipeInput("key1", request2.toByteArray())
+        val error1 = makeError("pod not found")
+        val error2 = makeError("deployment failed")
+        inputTopic.pipeInput("key1", error1.toByteArray())
+        inputTopic.pipeInput("key1", error2.toByteArray())
+        inputTopic.pipeInput("key1", error2.toByteArray())
 
         val results = outputTopic.readRecordsToList()
         assertEquals(2, results.size)
-        assertEquals(request1, KubernetesControlRequest.parseFrom(results[0].value()))
-        assertEquals(request2, KubernetesControlRequest.parseFrom(results[1].value()))
+        assertEquals(error1, Error.parseFrom(results[0].value()))
+        assertEquals(error2, Error.parseFrom(results[1].value()))
     }
 
     @Test
-    fun `different action types are not duplicates`() {
-        val getRequest = makeGetRequest("Pod", "my-pod")
-        val logsRequest = makeLogsRequest("pod/my-pod", "main", 100)
-        inputTopic.pipeInput("key1", getRequest.toByteArray())
-        inputTopic.pipeInput("key1", logsRequest.toByteArray())
+    fun `different timestamps make events non-duplicate`() {
+        val error1 = makeError("pod not found", epochSeconds = 1000)
+        val error2 = makeError("pod not found", epochSeconds = 2000)
+        inputTopic.pipeInput("key1", error1.toByteArray())
+        inputTopic.pipeInput("key1", error2.toByteArray())
 
         val results = outputTopic.readRecordsToList()
         assertEquals(2, results.size)

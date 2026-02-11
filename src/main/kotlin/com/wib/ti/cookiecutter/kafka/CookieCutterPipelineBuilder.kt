@@ -3,7 +3,6 @@ package com.wib.ti.cookiecutter.kafka
 import com.google.protobuf.Message
 import com.google.protobuf.Parser
 import com.solution_management.v1.Error
-import com.solution_management.v1.KubernetesControlRequest
 import kotlinx.serialization.SerializationException
 import org.apache.kafka.common.serialization.Deserializer
 import org.apache.kafka.common.serialization.Serde
